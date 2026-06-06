@@ -216,3 +216,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===== 不上传 GitHub 的大文件 =====
+data/calvin_raw/
+data/calvin_D/
+data/calvin_meta_test/
+data/env_splits_test/
+data/env_splits_test2/
+outputs/
+**/__pycache__/
+*.pyc
+.DS_Store
+
+# 大文件，任意位置都忽略
+calvin_raw/
+calvin_D/
+calvin_meta_test/
+env_splits_test/
+env_splits_test2/
+outputs/
+__pycache__/
+*.pyc
+.DS_Store

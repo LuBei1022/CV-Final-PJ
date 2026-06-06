@@ -1,0 +1,33 @@
+name: calvin-act
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # 核心框架
+      - lerobot[act]            # 提供 LeRobot 内置 ACT；以实际锁定版本为准
+      # 实验记录
+      - swanlab
+      # 语言条件用的冻结文本编码器（数据转换阶段使用）
+      - sentence-transformers
+      # CALVIN 数据读取/处理常用依赖
+      - numpy
+      - pandas
+      - pyarrow            # 读取 parquet（拆分/检查脚本用）
+      - opencv-python
+      - tqdm
+      - matplotlib         # 评测出图（src/compare_on_D.py）
+      - remotezip          # 只从远程 zip 抽取 scene_info.npy（data/fetch_scene_info.py）
+# 说明：
+# 1) PyTorch 不在此固定，因为 CUDA / mps 版本依平台而定：
+#    - GPU 服务器(RTX 6000 Pro)：按 https://pytorch.org 选对应 CUDA 版本安装
+#      例：pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#    - Mac(Apple Silicon)：pip install torch torchvision   # 自带 mps 支持
+# 2) 创建并激活隔离环境：
+#      conda env create -f environment.yml
+#      conda activate calvin-act
+#      # 然后单独装 torch（见上）
+# 3) 装完后用 `pip show lerobot` 记录版本号，写进 README，保证可复现。

@@ -1,0 +1,190 @@
+% =============================================================
+%  题目二实验报告  —— 基于 LeRobot 的 ACT 策略跨环境泛化
+%  编译方式：XeLaTeX（中文用 ctex）
+%      xelatex main.tex && bibtex main && xelatex main.tex && xelatex main.tex
+%  想换成官方 NeurIPS 模版：把 ctexart 换成 article，并 \usepackage{ctex} +
+%      \usepackage{neurips_2024}（neurips_2024.sty 到官网下一个文件即可）。
+% =============================================================
+\documentclass[11pt]{ctexart}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\title{\textbf{基于 LeRobot 的 ACT 策略跨环境泛化挑战}\\
+\large 计算机视觉期末作业 · 题目二}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2.5em}
+
+% -------------------- 首页信息：组员 / 分工 / 外部链接 --------------------
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+姓名 & 学号 \\
+\midrule
+\textcolor{red}{<姓名>} & \textcolor{red}{<学号>} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent\textbf{分工：}\textcolor{red}{<填写具体分工；若单人完成请注明>}。
+
+\medskip
+\noindent\textbf{项目仓库（GitHub）：}\url{<在此填写 Public 仓库链接>}\\
+\noindent\textbf{模型权重下载：}\url{<网盘链接>}\quad 提取码：\textcolor{red}{<若有>}
+
+\begin{abstract}
+本文围绕具身智能中的动作策略跨环境泛化问题，基于 LeRobot 框架内置的
+Action Chunking Transformer (ACT) 算法，在 CALVIN 数据集上开展实验。
+我们分别用\textbf{环境 B}、以及\textbf{环境 A+B+C 混合}数据，在相同网络结构与
+超参数下训练两个策略，并在\textbf{完全未见过的环境 D} 上进行 zero-shot 测试，
+对比二者的动作误差，进而分析 ACT 的动作分块机制 (action chunking)
+在视觉分布偏移 (visual distribution shift) 下的鲁棒性。
+\textcolor{red}{（一句话结论：待实验结果填写。）}
+\end{abstract}
+
+% ============================ 1 背景 ============================
+\section{任务背景介绍}
+具身智能要求策略在与训练时不同的环境中依然可用。模仿学习策略常因\textbf{视觉分布偏移}
+而性能骤降。本任务采用轻量级的 ACT 算法，研究：(i) 单一环境训练 vs.\ 多环境联合训练
+对泛化的影响；(ii) 动作分块机制为何能在跨环境时提供一定鲁棒性。
+\textcolor{red}{<补充：ACT/CALVIN 的研究意义、本文贡献点 2--3 条>}
+
+% ============================ 2 数据集 ============================
+\section{数据集描述}
+CALVIN 是面向语言条件、长程机器人操作的基准，包含 A/B/C/D 四个桌面环境，
+机器人为 7-DoF Franka Panda。本文使用已转换为 LeRobot 格式的
+\texttt{huiwon/calvin\_task\_ABC\_D}（约 7.81\,GB，30\,fps）。其关键字段：
+\begin{itemize}
+  \item \texttt{observation.state}（15 维，机器人本体感知 robot\_obs）；
+  \item \texttt{action}（7 维相对动作：末端位移 3 + 旋转 3 + 夹爪 1）；
+  \item 两路相机 \texttt{observation.images.image}（静态）与 \texttt{wrist\_image}（手腕），$256\times256$；
+  \item 语言任务指令（\texttt{tasks.jsonl}，经 \texttt{task\_index} 关联）。
+\end{itemize}
+数据原始的 4 个分片为均匀切块、并非按环境划分。我们利用每帧保留的
+\texttt{original\_frame\_idx} 配合 CALVIN 的 \texttt{scene\_info.npy} 帧号区间，
+将 episode 归属到环境 A/B/C，得到\texttt{仅 B} 与 \texttt{A+B+C} 两个训练子集。
+\textcolor{red}{<补充：各环境/子集的 episode 数与帧数统计表>}
+
+\begin{table}[h]\centering
+\caption{数据子集统计}\label{tab:data}
+\begin{tabular}{lccc}
+\toprule
+子集 & episode 数 & 帧数 & 用途 \\
+\midrule
+仅环境 B & \textcolor{red}{<>} & \textcolor{red}{<>} & 训练基础模型 \\
+环境 A+B+C & \textcolor{red}{<>} & \textcolor{red}{<>} & 训练联合模型 \\
+环境 D & \textcolor{red}{<>} & \textcolor{red}{<>} & zero-shot 测试 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================ 3 方法 ============================
+\section{方法原理简述}
+\subsection{ACT 与动作分块}
+ACT 是一个基于 CVAE 的策略：编码器从演示动作序列推断隐变量 $z$，
+Transformer 解码器以图像、本体状态（与 $z$）为条件，\textbf{一次预测未来 $k$ 步动作}
+（action chunk），推理时按块输出并可做时间步集成。相比逐步预测，分块降低了
+复合误差与对单帧观测噪声的敏感度。损失为重建动作的 $L_1$ 加 KL 正则：
+\begin{equation}
+\mathcal{L} = \mathbb{E}\big[\|a_{t:t+k}-\hat a_{t:t+k}\|_1\big] + \beta\, \mathrm{KL}\big(q(z|\cdot)\,\|\,\mathcal{N}(0,I)\big).
+\end{equation}
+
+\subsection{语言条件的实现}
+CALVIN 为多任务数据，同一画面在不同指令下动作不同。我们用冻结的文本编码器
+（\texttt{all-MiniLM-L6-v2}）将任务指令编码为向量并 $L_2$ 归一化，\textbf{拼接到
+\texttt{observation.state} 末尾}。这样 LeRobot 内置 ACT 的状态投影层即可自动消化，
+无需改动 ACT 源码；该语言维不参与标准化。
+
+\subsection{跨环境数据组织}
+4 个分片按环境清单过滤后拼接为单一训练集；按分片各自的 \texttt{tasks.jsonl}
+将 \texttt{task\_index} 映射为语言向量。基础模型与联合模型使用完全相同的
+网络结构与超参数，唯一差异是训练数据来自 \texttt{仅 B} 还是 \texttt{A+B+C}。
+
+% ============================ 4 实验设置 ============================
+\section{实验设置}
+\textcolor{red}{下表数值请以训练产出的 \texttt{train\_config.json} 为准核对填写。}
+\begin{table}[h]\centering
+\caption{网络结构与训练超参数（两个模型一致）}\label{tab:hparam}
+\begin{tabular}{ll}
+\toprule
+项目 & 取值 \\
+\midrule
+策略 & ACT (LeRobot 内置) \\
+视觉骨干 & ResNet-18 \\
+Transformer 维度 / 头数 & \textcolor{red}{512 / 8} \\
+编码器 / 解码器层数 & \textcolor{red}{4 / 1} \\
+动作分块长度 (chunk\_size) & \textcolor{red}{100} \\
+语言向量维度 & 384 (MiniLM, $L_2$ 归一化) \\
+状态输入维度 & $15 + 384$ \\
+Batch size & \textcolor{red}{32} \\
+优化器 / 学习率 & \textcolor{red}{AdamW / 1e-5} \\
+权重衰减 & \textcolor{red}{1e-4} \\
+KL 权重 $\beta$ & \textcolor{red}{10} \\
+训练步数 & \textcolor{red}{100{,}000} \\
+随机种子 & 1000 \\
+损失函数 & $L_1$ + KL \\
+评测指标 & Action $L_1$ / MSE（环境 D） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+实验记录使用 SwanLab。硬件：\textcolor{red}{<RTX 6000 Pro 等>}。
+
+% ============================ 5 结果 ============================
+\section{实验结果}
+\subsection{训练收敛对比}
+\begin{figure}[h]\centering
+% \includegraphics[width=0.8\linewidth]{figs/train_loss_curve.png}
+\caption{两个模型的训练 Action $L_1$ Loss 曲线（导出自 SwanLab）。\textcolor{red}{<替换为实际图>}}
+\label{fig:loss}
+\end{figure}
+
+\subsection{环境 D 上的 zero-shot 对比}
+\begin{table}[h]\centering
+\caption{在未见环境 D 上的动作误差对比}\label{tab:zeroshot}
+\begin{tabular}{lccc}
+\toprule
+模型 & 评测帧数 & Action $L_1\downarrow$ & Action MSE$\downarrow$ \\
+\midrule
+基础模型（仅 B） & \textcolor{red}{<>} & \textcolor{red}{<>} & \textcolor{red}{<>} \\
+联合模型（A+B+C） & \textcolor{red}{<>} & \textcolor{red}{<>} & \textcolor{red}{<>} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]\centering
+% \includegraphics[width=0.6\linewidth]{figs/per_chunk_position_l1.png}
+\caption{动作分块内各时间步的 $L_1$ 误差（由 \texttt{compare\_on\_D.py} 生成）。
+用于分析 action chunking 在视觉偏移下的鲁棒性。\textcolor{red}{<替换为实际图>}}
+\label{fig:chunk}
+\end{figure}
+
+% ============================ 6 分析 ============================
+\section{深度现象分析}
+\textcolor{red}{结合上面结果展开（建议覆盖以下角度）：}
+\begin{itemize}
+  \item 多环境训练相对单环境，在 D 上误差下降多少？说明多环境数据如何缓解视觉分布偏移。
+  \item 沿动作分块位置看，$L_1$ 误差随时间步如何变化？两个模型的曲线差异说明了什么？
+        为什么分块能在跨环境时提供鲁棒性（降低复合误差、对单帧视觉扰动不敏感）。
+  \item 失败案例与局限：语言条件、动作归一化、未做仿真 rollout 等带来的影响。
+\end{itemize}
+
+% ============================ 7 结论 ============================
+\section{结论}
+\textcolor{red}{<总结主要发现与今后改进方向。>}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
