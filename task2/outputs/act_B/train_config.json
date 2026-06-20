@@ -1,0 +1,11 @@
+{
+  "data": [
+    "/root/autodl-tmp/CV-Final-PJ/task2/data/calvin_split/splitB"
+  ],
+  "steps": 20000,
+  "batch_size": 32,
+  "lr": null,
+  "seed": 1000,
+  "device": "cuda",
+  "chunk_size": 100
+}

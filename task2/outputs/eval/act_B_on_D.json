@@ -1,0 +1,9 @@
+{
+  "checkpoint": "task2/outputs/act_B/checkpoints/best",
+  "train_data": [
+    "/root/autodl-tmp/CV-Final-PJ/task2/data/calvin_split/splitB"
+  ],
+  "eval_data": "/root/autodl-tmp/CV-Final-PJ/task2/data/calvin_split/splitD",
+  "n_frames": 18268,
+  "action_l1": 0.22171293284384302
+}
