@@ -1,0 +1,3 @@
+model,n_frames,action_l1,action_mse
+B-only,18268,0.22171293284384302,
+A+B+C,18268,0.1981053562699861,
