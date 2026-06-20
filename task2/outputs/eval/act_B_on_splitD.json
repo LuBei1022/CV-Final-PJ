@@ -1,0 +1,9 @@
+{
+  "checkpoint": "task2/outputs/act_B/checkpoints/best",
+  "train_data": [
+    "task2/data/calvin_split/splitB"
+  ],
+  "eval_data": "task2/data/calvin_split/splitD",
+  "n_frames": 18268,
+  "action_l1": 0.22159895522734882
+}
