@@ -1,3 +1,4 @@
+[![](https://raw.githubusercontent.com/SwanHubX/assets/main/badge1.svg)](https://swanlab.cn/@lubei1022/calvin-act/runs/m5sfz43w/chart)
 # 题目二：CALVIN × LeRobot ACT —— 跨环境泛化
 
 用 LeRobot 框架内置的 ACT（Action Chunking Transformer）算法,在 CALVIN 数据集上研究
