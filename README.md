@@ -10,10 +10,12 @@
 ```
 task2/
 ├── src/
-│   ├── train.py            # 训练脚本(基础模型 B / 联合模型 A+B+C 共用)
-│   ├── eval_d.py           # 在环境 D 上做 zero-shot 评测,算 Action L1
-│   ├── compare_on_D.py     # 读两个评测 JSON,出对比表与柱状图
-│   └── fix_stats_count.py  # 数据准备:给 v2.1 统计补 count 字段
+│   ├── train.py            # 训练脚本(基础模型B/联合模型A+B+C共用)
+│   ├── eval_d.py           # 在环境D上做zero-shot评测,算 Action L1
+│   ├── eval_perchunk.py    # 拓展实验:算动作块内逐时间步 L1(动作分块鲁棒性)
+│   ├── compare_on_D.py     # 读评测JSON,出对比表与图(柱状图 / 逐步误差曲线)
+│   └── fix_stats_count.py  # 数据准备:给v2.1统计补 count 字段
+│   
 └── outputs/
     ├── act_B/  act_ABC/    # 各模型的 checkpoints/best 与 train_config.json
     └── eval/               # act_B_on_D.json, act_ABC_on_D.json, 对比图
@@ -132,6 +134,43 @@ HF_HUB_OFFLINE=1 python task2/src/eval_d.py \
 python task2/src/compare_on_D.py \
   --results task2/outputs/eval/act_B_on_D.json task2/outputs/eval/act_ABC_on_D.json \
   --labels "B-only" "A+B+C" --out-dir task2/outputs/eval
+```
+
+## 拓展实验
+
+### 动作分块逐时间步误差曲线
+统计ACT预测的动作块内每个时间步(第$0\sim99$步)的$L_1$误差,直接展示动作分块在
+跨环境视觉偏移下的鲁棒性。对两个模型各跑一次,再叠加画曲线:
+
+```bash
+export HF_HOME=$(pwd)/hf_home
+D=task2/data/calvin_split
+
+HF_HUB_OFFLINE=1 python task2/src/eval_perchunk.py \
+  --checkpoint task2/outputs/act_B/checkpoints/best \
+  --train-data $D/splitB --eval-data $D/splitD --max-episodes 300 \
+  --out task2/outputs/eval/act_B_perchunk_D.json
+
+HF_HUB_OFFLINE=1 python task2/src/eval_perchunk.py \
+  --checkpoint task2/outputs/act_ABC/checkpoints/best \
+  --train-data $D/splitA $D/splitB $D/splitC --eval-data $D/splitD --max-episodes 300 \
+  --out task2/outputs/eval/act_ABC_perchunk_D.json
+
+python task2/src/compare_on_D.py \
+  --results task2/outputs/eval/act_B_perchunk_D.json task2/outputs/eval/act_ABC_perchunk_D.json \
+  --labels "B-only" "A+B+C" --out-dir task2/outputs/eval   # 生成 per_chunk_position_l1.png
+```
+
+### 跨环境退化（视觉分布偏移量化）
+把基础模型(仅B)分别在A/B/C/D上评测,观察误差随视觉偏移上升:
+
+```bash
+for E in splitA splitB splitC splitD; do
+  HF_HUB_OFFLINE=1 python task2/src/eval_d.py \
+    --checkpoint task2/outputs/act_B/checkpoints/best \
+    --train-data $D/splitB --eval-data $D/$E --max-episodes 300 \
+    --out task2/outputs/eval/act_B_on_${E}.json
+done
 ```
 
 ## 实验结果
