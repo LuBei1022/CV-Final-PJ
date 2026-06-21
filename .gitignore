@@ -25,4 +25,4 @@ __pycache__/
 *.toc
 
 # ===== 系统 =====
-.DS_Store
+.DS_Storetask2/outputs/
